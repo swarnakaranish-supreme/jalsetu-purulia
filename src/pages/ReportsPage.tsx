@@ -189,7 +189,17 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ data, isSimulated }) =
                         <tr key={s.id}>
                           <td><strong>{s.name}</strong></td>
                           <td>{s.siteType.replace('_', ' ')}</td>
-                          <td>{res.percentage}% ({res.totalScore}/{res.maxPossibleScore})</td>
+                          <td>
+                            {res.isInsufficient ? (
+                              <span style={{ fontWeight: 600, color: '#ad6800' }}>
+                                Insufficient Data (Score Deferred)
+                              </span>
+                            ) : (
+                              <span>
+                                {res.percentage}% ({res.totalScore}/{res.maxPossibleScore})
+                              </span>
+                            )}
+                          </td>
                           <td style={{ fontSize: '0.8rem' }}>{res.recommendation}</td>
                           <td style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
                             {res.missingData.join(', ') || 'None listed'}

@@ -170,6 +170,8 @@ export interface ScreeningFactor {
   weight: number;
   reasoning: string;
   dataAvailable: boolean;
+  isCritical: boolean;
+  screeningImpact: string; // Explains how this factor affects screening decisions
 }
 
 export interface ScreeningResult {
@@ -177,6 +179,8 @@ export interface ScreeningResult {
   totalScore: number;
   maxPossibleScore: number;
   percentage: number;
+  isInsufficient: boolean; // True when any critical baseline factor is missing
+  criticalMissing: string[]; // List of missing critical factors
   factors: ScreeningFactor[];
   missingData: string[];
   recommendation: string;

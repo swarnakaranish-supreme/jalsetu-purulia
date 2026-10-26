@@ -27,7 +27,7 @@ const INITIAL_FORM: Omit<SiteAssessment, 'id' | 'createdAt' | 'updatedAt'> = {
   waterDemand: '',
   ownershipStatus: 'unknown',
   constraints: '',
-  dataSource: 'Field visit assessment',
+  dataSource: 'Not verified / demonstration entry',
   assessmentDate: new Date().toISOString().substring(0, 10),
   notes: '',
   isSimulated: false,
@@ -64,7 +64,9 @@ export const SiteAssessmentPage: React.FC<SiteAssessmentPageProps> = ({
     const siteToSave: SiteAssessment = {
       ...formData,
       id: selectedSiteId || generateId(),
-      createdAt: selectedSiteId ? (sites.find(s => s.id === selectedSiteId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
+      createdAt: selectedSiteId
+        ? sites.find(s => s.id === selectedSiteId)?.createdAt || new Date().toISOString()
+        : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
@@ -97,7 +99,7 @@ export const SiteAssessmentPage: React.FC<SiteAssessmentPageProps> = ({
       waterDemand: site.waterDemand,
       ownershipStatus: site.ownershipStatus,
       constraints: site.constraints,
-      dataSource: site.dataSource,
+      dataSource: site.dataSource || 'Not verified / demonstration entry',
       assessmentDate: site.assessmentDate,
       notes: site.notes,
       isSimulated: site.isSimulated,
@@ -145,13 +147,13 @@ export const SiteAssessmentPage: React.FC<SiteAssessmentPageProps> = ({
         </div>
 
         {activeTab === 'form' ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
             {/* Form Section */}
             <form onSubmit={handleSubmit} className="card">
               <div className="card-header">
                 <h2>Candidate Location Record</h2>
                 <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-                  Fields with unknown data should remain 'Unknown'. Do not guess geological or ownership data.
+                  Fields with unknown data should remain 'Unknown'. Never invent geological, ownership, or catchment numbers.
                 </p>
               </div>
 
@@ -249,6 +251,7 @@ export const SiteAssessmentPage: React.FC<SiteAssessmentPageProps> = ({
                       })
                     }
                   />
+                  <span className="form-hint">Critical parameter for calculating runoff yield.</span>
                 </div>
               </div>
 
@@ -266,6 +269,7 @@ export const SiteAssessmentPage: React.FC<SiteAssessmentPageProps> = ({
                     <option value="moderate">Moderate (5% – 10%)</option>
                     <option value="steep">Steep (&gt; 10%)</option>
                   </select>
+                  <span className="form-hint">Controls hydraulic velocity and breach risk.</span>
                 </div>
                 <div className="form-group">
                   <label htmlFor="soil-type">Predominant Soil Type</label>
@@ -283,6 +287,7 @@ export const SiteAssessmentPage: React.FC<SiteAssessmentPageProps> = ({
                     <option value="rocky">Rocky / Hard rock outcrop</option>
                     <option value="mixed">Mixed</option>
                   </select>
+                  <span className="form-hint">Determines percolation vs surface impoundment.</span>
                 </div>
               </div>
 
@@ -295,7 +300,7 @@ export const SiteAssessmentPage: React.FC<SiteAssessmentPageProps> = ({
                   value={formData.geologyInfo}
                   onChange={e => setFormData({ ...formData, geologyInfo: e.target.value })}
                 />
-                <span className="form-hint">Leave blank if no geological study has been consulted.</span>
+                <span className="form-hint">Leave blank if no hydrogeological study has been consulted.</span>
               </div>
 
               <div className="form-row">
@@ -337,6 +342,7 @@ export const SiteAssessmentPage: React.FC<SiteAssessmentPageProps> = ({
                     value={formData.waterDemand}
                     onChange={e => setFormData({ ...formData, waterDemand: e.target.value })}
                   />
+                  <span className="form-hint">Identifies beneficiary group and utility.</span>
                 </div>
                 <div className="form-group">
                   <label htmlFor="ownership">Land Ownership / Permission</label>
@@ -352,6 +358,7 @@ export const SiteAssessmentPage: React.FC<SiteAssessmentPageProps> = ({
                     <option value="private_no_permission">Private (No consent yet)</option>
                     <option value="disputed">Disputed / Under litigation</option>
                   </select>
+                  <span className="form-hint">Legal clearance required prior to work.</span>
                 </div>
               </div>
 
@@ -367,14 +374,45 @@ export const SiteAssessmentPage: React.FC<SiteAssessmentPageProps> = ({
 
               <div className="form-row">
                 <div className="form-group">
-                  <label htmlFor="data-source">Data Source</label>
-                  <input
-                    id="data-source"
-                    type="text"
-                    value={formData.dataSource}
-                    onChange={e => setFormData({ ...formData, dataSource: e.target.value })}
-                  />
+                  <label htmlFor="data-source-select">Data Source Category *</label>
+                  <select
+                    id="data-source-select"
+                    value={[
+                      'Not verified / demonstration entry',
+                      'Direct field visit assessment',
+                      'Gram Panchayat records / register',
+                      'Community / stakeholder consultation',
+                      'Secondary literature / CGWB report / GIS map',
+                    ].includes(formData.dataSource) ? formData.dataSource : 'custom'}
+                    onChange={e => {
+                      if (e.target.value !== 'custom') {
+                        setFormData({ ...formData, dataSource: e.target.value });
+                      } else {
+                        setFormData({ ...formData, dataSource: '' });
+                      }
+                    }}
+                  >
+                    <option value="Not verified / demonstration entry">Not verified / demonstration entry (Default)</option>
+                    <option value="Direct field visit assessment">Direct field visit assessment</option>
+                    <option value="Gram Panchayat records / register">Gram Panchayat records / register</option>
+                    <option value="Community / stakeholder consultation">Community / stakeholder consultation</option>
+                    <option value="Secondary literature / CGWB report / GIS map">Secondary literature / CGWB report / GIS map</option>
+                    <option value="custom">Other / Custom source entry...</option>
+                  </select>
+                  <div style={{ marginTop: '0.35rem' }}>
+                    <input
+                      id="data-source"
+                      type="text"
+                      placeholder="Specify exact data source details"
+                      value={formData.dataSource}
+                      onChange={e => setFormData({ ...formData, dataSource: e.target.value })}
+                    />
+                    <span className="form-hint">
+                      Default is "Not verified / demonstration entry". Select or type the source manually.
+                    </span>
+                  </div>
                 </div>
+
                 <div className="form-group">
                   <label htmlFor="assessment-date">Assessment Date</label>
                   <input
@@ -399,35 +437,99 @@ export const SiteAssessmentPage: React.FC<SiteAssessmentPageProps> = ({
             {/* Live Screening Breakdown Card */}
             <div className="card" style={{ position: 'sticky', top: '1rem' }}>
               <div className="card-header">
-                <h2>Provisional Screening Breakdown</h2>
+                <h2>Rule-Based Screening Panel</h2>
                 <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
-                  Transparent, rule-based screening score calculated in real-time.
+                  Transparent heuristic evaluation based exclusively on supplied field entries.
                 </p>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--color-primary)' }}>
-                  {screeningResult.totalScore}
-                </span>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
-                  / {screeningResult.maxPossibleScore} ({screeningResult.percentage}%)
-                </span>
-              </div>
-
-              <div className="screening-bar-bg" style={{ marginBottom: '1rem' }}>
+              {/* Insufficient Information Alert Banner */}
+              {screeningResult.isInsufficient ? (
                 <div
-                  className="screening-bar-fill"
                   style={{
-                    width: `${Math.min(100, Math.max(5, screeningResult.percentage))}%`,
-                    backgroundColor:
-                      screeningResult.percentage >= 70
-                        ? 'var(--color-success)'
-                        : screeningResult.percentage >= 40
-                        ? 'var(--color-warning)'
-                        : 'var(--color-danger)',
+                    backgroundColor: '#fff8e6',
+                    border: '1px solid #ffeaa7',
+                    borderLeft: '5px solid #d48806',
+                    padding: '0.85rem 1rem',
+                    borderRadius: 'var(--radius)',
+                    marginBottom: '1.25rem',
                   }}
-                />
-              </div>
+                >
+                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#ad6800', marginBottom: '0.25rem' }}>
+                    Insufficient information for assessment
+                  </div>
+                  <p style={{ fontSize: '0.8125rem', color: '#614700', lineHeight: 1.45, margin: 0 }}>
+                    Critical baseline parameters required for a reliable feasibility evaluation are missing.
+                    Do not interpret a low score under incomplete data as an indication of poor site quality.
+                  </p>
+                  <div style={{ marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                    {screeningResult.criticalMissing.map((item, idx) => (
+                      <span
+                        key={idx}
+                        style={{
+                          fontSize: '0.725rem',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          backgroundColor: '#ffe58f',
+                          color: '#614700',
+                          border: '1px solid #ffd666',
+                          fontWeight: 600,
+                        }}
+                      >
+                        Missing: {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Score Display (Suppressed when baseline data is incomplete) */}
+              {screeningResult.isInsufficient ? (
+                <div
+                  style={{
+                    marginBottom: '1rem',
+                    padding: '0.75rem 1rem',
+                    background: '#f9f9f9',
+                    borderRadius: 'var(--radius)',
+                    border: '1px dashed var(--color-border)',
+                  }}
+                >
+                  <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--color-text-secondary)' }}>
+                    Score Indeterminate (Inputs Incomplete)
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
+                    {screeningResult.criticalMissing.length} critical baseline{' '}
+                    {screeningResult.criticalMissing.length === 1 ? 'factor is' : 'factors are'} unrecorded.
+                    Numerical score is deferred until required baseline data is supplied.
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--color-primary)' }}>
+                      {screeningResult.totalScore}
+                    </span>
+                    <span style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
+                      / {screeningResult.maxPossibleScore} ({screeningResult.percentage}%)
+                    </span>
+                  </div>
+
+                  <div className="screening-bar-bg" style={{ marginBottom: '1rem' }}>
+                    <div
+                      className="screening-bar-fill"
+                      style={{
+                        width: `${Math.min(100, Math.max(5, screeningResult.percentage))}%`,
+                        backgroundColor:
+                          screeningResult.percentage >= 70
+                            ? 'var(--color-success)'
+                            : screeningResult.percentage >= 40
+                            ? 'var(--color-warning)'
+                            : 'var(--color-danger)',
+                      }}
+                    />
+                  </div>
+                </>
+              )}
 
               {/* Recommendation Callout */}
               <div
@@ -438,23 +540,60 @@ export const SiteAssessmentPage: React.FC<SiteAssessmentPageProps> = ({
                   border: '1px solid var(--color-border)',
                   marginBottom: '1rem',
                   fontSize: '0.85rem',
+                  lineHeight: 1.5,
                 }}
               >
-                <strong>Preliminary Assessment: </strong>
+                <strong>Evaluation Status: </strong>
                 {screeningResult.recommendation}
               </div>
 
-              {/* Factor Breakdown */}
-              <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+              {/* Factor Breakdown with Screening Impact Explanations */}
+              <div style={{ maxHeight: '340px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Factor Breakdown &amp; Screening Rationale:
+                </div>
                 {screeningResult.factors.map((f, idx) => (
                   <div key={idx} className="screening-factor">
                     <div className="screening-factor-header">
-                      <span className="screening-factor-name">{f.name}</span>
+                      <span className="screening-factor-name">
+                        {f.name}
+                        {f.isCritical && (
+                          <span
+                            style={{
+                              fontSize: '0.65rem',
+                              padding: '1px 5px',
+                              marginLeft: '6px',
+                              borderRadius: '3px',
+                              background: f.dataAvailable ? '#e8f4f8' : '#fce4ec',
+                              color: f.dataAvailable ? '#1a5276' : '#c0392b',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {f.dataAvailable ? 'Critical ✓' : 'Critical Missing'}
+                          </span>
+                        )}
+                      </span>
                       <span className="screening-factor-score">
                         {f.dataAvailable ? `${f.score}/10` : 'No data'}
                       </span>
                     </div>
-                    <p className="screening-factor-reasoning">{f.reasoning}</p>
+
+                    <p className="screening-factor-reasoning" style={{ marginBottom: '0.35rem' }}>
+                      <strong>Assessment:</strong> {f.reasoning}
+                    </p>
+
+                    <div
+                      style={{
+                        fontSize: '0.725rem',
+                        color: 'var(--color-text-secondary)',
+                        background: '#f4ede1',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      <strong>How this affects screening:</strong> {f.screeningImpact}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -503,8 +642,8 @@ export const SiteAssessmentPage: React.FC<SiteAssessmentPageProps> = ({
                       <th>Site Name</th>
                       <th>Location</th>
                       <th>Site Type</th>
-                      <th>Screening Score</th>
-                      <th>Ownership</th>
+                      <th>Screening Status / Score</th>
+                      <th>Data Source</th>
                       <th>Condition</th>
                       <th>Date</th>
                       <th>Actions</th>
@@ -526,9 +665,23 @@ export const SiteAssessmentPage: React.FC<SiteAssessmentPageProps> = ({
                           </td>
                           <td>{site.siteType.replace('_', ' ')}</td>
                           <td>
-                            <strong>{res.percentage}%</strong> ({res.totalScore}/{res.maxPossibleScore})
+                            {res.isInsufficient ? (
+                              <span
+                                className="badge badge--fair"
+                                title={`Critical parameters missing: ${res.criticalMissing.join(', ')}`}
+                                style={{ fontWeight: 600 }}
+                              >
+                                Insufficient Data ({res.criticalMissing.length} missing)
+                              </span>
+                            ) : (
+                              <span>
+                                <strong>{res.percentage}%</strong> ({res.totalScore}/{res.maxPossibleScore})
+                              </span>
+                            )}
                           </td>
-                          <td>{site.ownershipStatus.replace('_', ' ')}</td>
+                          <td style={{ fontSize: '0.785rem', maxWidth: '140px' }}>
+                            {site.dataSource || 'Not verified'}
+                          </td>
                           <td>
                             <span className={`badge badge--${site.existingStructureCondition}`}>
                               {site.existingStructureCondition}

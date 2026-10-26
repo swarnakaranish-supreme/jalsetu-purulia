@@ -20,7 +20,7 @@ describe('Site Screening Method', () => {
     waterDemand: 'Drinking and midday meal water for 300 students',
     ownershipStatus: 'government',
     constraints: 'Electricity intermittent for pump',
-    dataSource: 'School survey',
+    dataSource: 'Direct field visit assessment',
     assessmentDate: '2024-05-10',
     notes: 'Good candidate for rooftop rainwater harvesting',
     isSimulated: false,
@@ -45,7 +45,7 @@ describe('Site Screening Method', () => {
     waterDemand: '',
     ownershipStatus: 'unknown',
     constraints: '',
-    dataSource: '',
+    dataSource: 'Not verified / demonstration entry',
     assessmentDate: '',
     notes: '',
     isSimulated: false,
@@ -53,33 +53,81 @@ describe('Site Screening Method', () => {
     updatedAt: '2024-05-10T10:00:00Z',
   };
 
-  it('produces a comprehensive score breakdown for a complete site', () => {
+  it('produces a comprehensive score breakdown for a complete site without marking it insufficient', () => {
     const res = screenSite(completeSite);
 
+    expect(res.isInsufficient).toBe(false);
+    expect(res.criticalMissing.length).toBe(0);
     expect(res.totalScore).toBeGreaterThan(0);
     expect(res.percentage).toBeGreaterThan(60);
     expect(res.factors.length).toBe(8);
-    expect(res.recommendation).toContain('warrant further detailed assessment');
-    expect(res.warnings.some(w => w.includes('provisional demonstration tool'))).toBe(true);
+    expect(res.recommendation).toContain('favourable preliminary characteristics');
+    expect(res.warnings.some(w => w.includes('provisional demonstration heuristic'))).toBe(true);
+
+    // Verify all factors provide screening impact explanations
+    res.factors.forEach(f => {
+      expect(f.screeningImpact).toBeDefined();
+      expect(f.screeningImpact.length).toBeGreaterThan(15);
+    });
   });
 
-  it('handles insufficient information gracefully without throwing', () => {
+  it('marks incomplete sites as Insufficient Information when critical factors are missing', () => {
     const res = screenSite(bareSite);
 
-    expect(res.recommendation).toContain('Insufficient information');
-    expect(res.missingData.length).toBeGreaterThan(3);
-    expect(res.missingData).toContain('Catchment area not specified');
-    expect(res.missingData).toContain('Slope category not specified');
-    expect(res.missingData).toContain('Land ownership and permission status not verified');
-    expect(res.warnings.some(w => w.includes('More than half'))).toBe(true);
+    expect(res.isInsufficient).toBe(true);
+    expect(res.criticalMissing.length).toBe(5);
+    expect(res.criticalMissing).toContain('Catchment area');
+    expect(res.criticalMissing).toContain('Slope category');
+    expect(res.criticalMissing).toContain('Soil / Geology information');
+    expect(res.criticalMissing).toContain('Land ownership / permission status');
+    expect(res.criticalMissing).toContain('Water demand / intended use');
+
+    expect(res.recommendation).toContain('Insufficient information for assessment');
+    expect(res.recommendation).toContain('Do not interpret a low score under incomplete data as poor site quality');
+    expect(res.warnings.some(w => w.includes('Critical baseline information is missing'))).toBe(true);
+  });
+
+  it('marks site as insufficient even if only one critical parameter (e.g. Catchment Area) is missing', () => {
+    const missingCatchment: SiteAssessment = {
+      ...completeSite,
+      catchmentAreaSqm: null,
+    };
+    const res = screenSite(missingCatchment);
+
+    expect(res.isInsufficient).toBe(true);
+    expect(res.criticalMissing).toEqual(['Catchment area']);
+    expect(res.recommendation).toContain('Insufficient information for assessment');
+  });
+
+  it('marks site as insufficient if land permission is unverified', () => {
+    const unverifiedLand: SiteAssessment = {
+      ...completeSite,
+      ownershipStatus: 'unknown',
+    };
+    const res = screenSite(unverifiedLand);
+
+    expect(res.isInsufficient).toBe(true);
+    expect(res.criticalMissing).toContain('Land ownership / permission status');
+  });
+
+  it('marks site as insufficient if water demand is missing or blank', () => {
+    const noDemand: SiteAssessment = {
+      ...completeSite,
+      waterDemand: '   ',
+    };
+    const res = screenSite(noDemand);
+
+    expect(res.isInsufficient).toBe(true);
+    expect(res.criticalMissing).toContain('Water demand / intended use');
   });
 
   it('favours restoration of fair-condition existing assets', () => {
     const res = screenSite(completeSite);
-    const structFactor = res.factors.find(f => f.name === 'Existing Structure');
+    const structFactor = res.factors.find(f => f.name === 'Existing Structure Condition');
     expect(structFactor).toBeDefined();
     expect(structFactor?.score).toBe(7);
-    expect(structFactor?.reasoning).toContain('Restoration may be more cost-effective');
+    expect(structFactor?.reasoning).toContain('Rehabilitation and desilting is prioritized');
+    expect(structFactor?.screeningImpact).toContain('Restoration-First Principle');
   });
 
   it('penalises unpermitted or disputed land', () => {
@@ -89,8 +137,8 @@ describe('Site Screening Method', () => {
       ownershipStatus: 'disputed',
     };
     const res = screenSite(disputedSite);
-    const landFactor = res.factors.find(f => f.name === 'Land Availability');
+    const landFactor = res.factors.find(f => f.name === 'Land Ownership & Permission');
     expect(landFactor?.score).toBe(1);
-    expect(landFactor?.reasoning).toContain('Disputed');
+    expect(landFactor?.reasoning).toContain('Disputed ownership');
   });
 });

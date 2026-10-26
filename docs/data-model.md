@@ -24,6 +24,7 @@ erDiagram
         float tankLengthM
         float tankWidthM
         float tankDepthM
+        string dataSource
         boolean isSimulated
     }
 
@@ -35,6 +36,7 @@ erDiagram
         string soilType
         string existingStructureCondition
         string ownershipStatus
+        string dataSource
         boolean isSimulated
     }
 
@@ -86,7 +88,7 @@ Represents an existing or newly constructed physical water conservation structur
 | `tankWidthM` | number \| null | Internal width for rectangular vertical tanks (m) |
 | `tankDepthM` | number \| null | Internal maximum depth (m) |
 | `notes` | string | Field observations and description |
-| `dataSource` | string | Origin of record (e.g. field visit, panchayat register) |
+| `dataSource` | string | Origin of record (defaults to "Not verified / demonstration entry") |
 | `isSimulated` | boolean | `true` if record is demonstration data; `false` if user-entered |
 | `createdAt` | string | ISO timestamp |
 | `updatedAt` | string | ISO timestamp |
@@ -106,6 +108,32 @@ Represents a preliminary survey of a candidate location before any physical work
 | `waterDemand` | string | Qualitative intended demand |
 | `ownershipStatus`| `OwnershipStatus`| `government`, `community`, `private_with_permission`, `private_no_permission`, `disputed`, `unknown` |
 | `constraints` | string | Documented limitations (access, road, rocks) |
+| `dataSource` | string | Origin of record (defaults to "Not verified / demonstration entry") |
+
+### `ScreeningFactor` & `ScreeningResult`
+Defines the rule-based evaluation of site feasibility.
+| Field | Type | Description |
+|---|---|---|
+| `factor` | string | Name of evaluation factor (1 of 8) |
+| `score` | number | Points assigned (0 to 10) |
+| `maxScore` | number | Maximum possible points (10) |
+| `weight` | number | Factor importance weighting (0.10 to 0.15) |
+| `notes` | string | Specific rationale for awarded score |
+| `isCritical` | boolean | `true` if this factor is one of the 5 baseline requirements |
+| `screeningImpact` | string | Detailed engineering explanation of how this factor impacts screening |
+
+#### `ScreeningResult`
+| Field | Type | Description |
+|---|---|---|
+| `totalScore` | number | Weighted score sum |
+| `maxPossibleScore` | number | Maximum theoretical weighted score (10.0) |
+| `percentage` | number | Score percentage (suppressed if `isInsufficient` is true) |
+| `suitability` | string | `high`, `moderate`, `low`, or `insufficient_data` |
+| `factors` | `ScreeningFactor[]` | Breakdown of all 8 evaluated factors |
+| `recommendation` | string | Actionable guidance for field engineers |
+| `missingData` | string[] | List of all omitted attributes |
+| `isInsufficient` | boolean | `true` if any critical baseline factor is missing |
+| `criticalMissing` | string[] | Specific list of missing baseline requirements |
 
 ### `MonitoringObservation`
 Periodic reading of weather and storage levels.

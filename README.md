@@ -9,8 +9,10 @@
 ## 1. Prototype Notice & Honest Scope
 **JalSetu Purulia is an open-source student innovation prototype.**  
 - **Not government-approved or field-deployed:** The system has not been commissioned by a government department or implemented across a live village.
-- **Simulated demonstration data:** Example records pre-loaded in this application are simulated to demonstrate the workflow. They must not be cited as real field evidence or verified district water metrics.
+- **Simulated demonstration data:** Example records pre-loaded in this application are simulated to demonstrate the workflow. They are clearly tagged and must not be cited as real field measurements or verified district statistics.
+- **Default Data Source is "Not verified / demonstration entry":** All new site assessments and asset records default to unverified status until a surveyor manually confirms a field visit.
 - **No unverified AI claims:** The application does not use artificial intelligence or black-box algorithms to make civil engineering decisions. It uses transparent, rule-based screening heuristics.
+- **Groundwater vs. Surface Storage Distinction:** The software tracks engineered tank and pond storage levels; it **never claims that surface tank water readings prove regional groundwater recharge**.
 
 ---
 
@@ -30,14 +32,15 @@ Rainwater harvesting is a centuries-old practice in Purulia; government agencies
 2. **Prioritizing Restoration Over New Excavation:** In many locations, desilting and repairing an existing breached pond yields immediate storage at a fraction of the cost and land-acquisition friction of excavating a new pond.
 3. **Closing the Maintenance Loop:** Physical infrastructure fails because minor clogs, torn mesh guards, and silt accumulation go unrecorded until catastrophic failure occurs.
 4. **Distinguishing Storage from Aquifer Recharge:** A full rainwater tank provides domestic water storage; it does not automatically recharge the regional deep aquifer. JalSetu keeps these terms scientifically separate.
+5. **Score Integrity under Incomplete Data:** If baseline parameters (catchment area, slope, soil, land permission, water demand) are missing, the system refuses to present a misleading low score—it marks the assessment as "Insufficient Information" and tells surveyors what measurements are needed.
 
 ---
 
 ## 4. Current Features (Implemented)
 - **Overview Dashboard:** Live summary cards calculated dynamically from the current dataset (registered assets, inspection needs, open issues, latest readings), a 15-point time-series trend chart (Recharts), Leaflet GIS asset map, and recent maintenance logs.
-- **Site Assessment & Rule-Based Screening:** Multi-parameter candidate site survey form. Live 8-factor transparent screening breakdown (catchment potential, slope, soil/geology, existing structure condition, water demand, land availability, access feasibility, and data quality). Explicitly reports missing data.
+- **Site Assessment & Rule-Based Screening:** Multi-parameter candidate site survey form. Live 8-factor transparent screening breakdown. Prominently displays *"Insufficient information for assessment"* and suppresses numerical scores if critical parameters are missing. Full screening impact explanations for each factor.
 - **Intervention Comparison:** Side-by-side analysis of 5 options, leading with **Restoration of Existing Ponds/Structures**, followed by Rooftop RWH, Farm Ponds, Percolation Tanks, and Check Dams. Features transparent cost notes (no fake rupee numbers) and mandatory engineering clearance warnings.
-- **Asset Register:** Local storage registry with search, type and condition filtering, full CRUD (Create, Read, Update, Delete with confirmation modal), rectangular tank geometry input ($L \times W \times D$), and CSV/JSON export.
+- **Asset Register:** Local storage registry with search, type and condition filtering, full CRUD (Create, Read, Update, Delete with confirmation modal), rectangular tank geometry input ($L \times W \times D$), manual data-source selector, and CSV/JSON export.
 - **Water Monitoring:** Observation logger tracking rainfall events, measured water levels, calculated rectangular storage volumes, and overflow alerts. Includes sensor range validation and clear hydrological distinctions.
 - **Maintenance & Inspection Tracker:** Action tracking workflow categorizing siltation, leakages, blockages, and overdue inspections. Filter by status and priority, log resolution actions, and export to CSV.
 - **Rainwater Calculation Tool:** Rooftop runoff calculation tool with standard hydrological runoff formula, tank capacity sufficiency evaluation, and realistic domestic consumption context.
@@ -62,7 +65,7 @@ Rainwater harvesting is a centuries-old practice in Purulia; government agencies
 - **Charts:** Recharts 2.x — SVG-based charting for time-series data.
 - **Mapping:** Leaflet 1.9.4 + OpenStreetMap — Lightweight GIS viewer with an automatic offline fallback mode.
 - **Storage:** Browser `localStorage` — Local-first architecture; runs anywhere without cloud accounts, backend servers, or internet dependencies.
-- **Testing:** Vitest 2.x + `@testing-library/jest-dom` — 27 automated unit tests covering calculations, screening, validation, and storage.
+- **Testing:** Vitest 2.x + `@testing-library/jest-dom` — 30 automated unit tests covering calculations, screening, validation, and storage.
 - **Firmware:** Arduino C++ for ESP32.
 
 ---
@@ -93,21 +96,26 @@ The application will launch at **`http://localhost:3000`**.
 ```bash
 npm test
 ```
-All 27 automated tests will execute and verify formula accuracy, unit conversions, geometry logic, and storage integrity.
+Or run Vitest directly:
+```bash
+npx vitest run
+```
+All 30 automated tests will execute and verify formula accuracy, critical screening guards, unit conversions, geometry logic, and storage integrity.
 
 ### Step 5: Build for Production
 ```bash
 npm run build
 ```
-Generates a minified, optimized production bundle in the `dist/` folder.
+Generates a minified, optimized production bundle in the `dist/` folder via `tsc -b && vite build`.
 
 ---
 
 ## 8. How to Load or Reset Demonstration Data
 1. Launch the web application (`npm run dev`).
 2. On first launch, the simulated dataset (`SAMPLE_DATA`) is loaded automatically into browser storage.
-3. To reload the demonstration data at any time, click the **"Reset to Demo Data"** button in the sidebar footer.
-4. To start with a clean slate, click **"Clear All Data"**.
+3. All pre-loaded demonstration records are explicitly tagged as `isSimulated: true` and have their data source labelled as demonstration entries.
+4. To reload the demonstration data at any time, click the **"Reset to Demo Data"** button in the sidebar footer.
+5. To start with a clean slate, click **"Clear All Data"**.
 
 ---
 

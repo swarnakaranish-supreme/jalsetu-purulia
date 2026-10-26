@@ -26,7 +26,7 @@ export const NoticeBanner: React.FC<NoticeBannerProps> = ({ isSimulated, customM
       <div>
         <strong>Demonstration notice: </strong>
         {customMessage ||
-          'Demonstration dataset — values are simulated and are not field measurements. Do not cite as actual district water metrics or verified asset counts.'}
+          'Demonstration dataset — values are simulated and are not field measurements. Do not cite as actual district water metrics, verified asset counts, or proven groundwater recharge improvements.'}
       </div>
     </div>
   );

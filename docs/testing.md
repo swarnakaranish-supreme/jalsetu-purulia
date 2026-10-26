@@ -8,7 +8,7 @@ Testing covers:
 2. **Input validation**: Rejection of negative rainfall, invalid efficiencies, negative areas.
 3. **Geometric calculations**: Rectangular vertical-sided tank volume ($L \times W \times D$).
 4. **Sensor reading plausibility**: Rejection of negative depths, blind-zone acoustic echoes, and readings exceeding tank dimensions.
-5. **Site screening engine**: 8-factor score breakdown, missing data detection, restoration prioritization, disputed land penalties.
+5. **Site screening engine**: 8-factor score breakdown, 5-baseline critical factor enforcement, score suppression under incomplete data, screening impact descriptions, restoration prioritization, disputed land penalties.
 6. **Storage layer & CRUD**: Asset persistence, maintenance status transitions, CSV export formatting, corrupted JSON rejection.
 
 ## 2. Test Execution Command
@@ -25,14 +25,14 @@ npx vitest run
 ```text
  RUN  v2.1.8 C:/Users/user/Desktop/JalSetu Purulia
 
- ✓ src/test/calculations.test.ts (17 tests) 8ms
- ✓ src/test/screening.test.ts (4 tests) 5ms
+ ✓ src/test/calculations.test.ts (17 tests) 9ms
+ ✓ src/test/screening.test.ts (7 tests) 6ms
  ✓ src/test/storage.test.ts (6 tests) 6ms
 
  Test Files  3 passed (3)
-      Tests  27 passed (27)
-   Start at  17:28:38
-   Duration  1.65s (transform 263ms, setup 567ms, collect 401ms, tests 19ms, environment 2.10s, prepare 874ms)
+      Tests  30 passed (30)
+   Start at  17:34:04
+   Duration  1.67s (transform 264ms, setup 568ms, collect 402ms, tests 21ms, environment 2.12s, prepare 878ms)
 ```
 
 ## 4. Test Case Matrix
@@ -56,10 +56,14 @@ npx vitest run
 - `converts litres to cubic metres correctly`: $1000\text{ L} = 1\text{ m}^3$.
 - `converts cubic metres to litres correctly`: $1\text{ m}^3 = 1000\text{ L}$.
 
-### Suite: `screening.test.ts` (4 tests)
-- `produces a comprehensive score breakdown for a complete site`: Evaluates multi-factor breakdown and percentage calculation.
-- `handles insufficient information gracefully without throwing`: Confirms that a site missing 5+ factors triggers "Insufficient Information".
-- `favours restoration of fair-condition existing assets`: Verifies that pre-existing structures in fair condition score high.
+### Suite: `screening.test.ts` (7 tests)
+- `produces a comprehensive score breakdown for a complete site`: Evaluates multi-factor breakdown and percentage calculation for fully documented sites.
+- `flags incomplete assessments with isInsufficient and identifies critical missing data`: Confirms that a bare candidate site with missing baseline parameters triggers `isInsufficient = true` and `suitability = 'insufficient_data'`.
+- `flags missing catchment area as critical`: Verifies that a site lacking catchment area is marked incomplete with a clear warning recommendation.
+- `flags unverified land ownership as critical`: Confirms that an unknown land ownership status prevents final scoring.
+- `flags missing water demand as critical`: Verifies that undefined demand prevents unvetted project execution.
+- `includes comprehensive screening impact descriptions for all factors`: Asserts that all 8 factors provide engineering impact explanations.
+- `favours restoration of fair-condition existing assets`: Verifies that pre-existing structures in fair condition score high (restoration-first).
 - `penalises unpermitted or disputed land`: Checks that disputed lands receive score of 1.
 
 ### Suite: `storage.test.ts` (6 tests)

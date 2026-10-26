@@ -197,8 +197,9 @@ export const WaterMonitoringPage: React.FC<WaterMonitoringPageProps> = ({
               <li><strong>Measured Water Depth:</strong> Water level in a specific storage tank or pond (m).</li>
               <li><strong>Calculated Storage:</strong> Geometric volume in a calibrated tank (Litres).</li>
               <li>
-                <strong>Aquifer Recharge:</strong> A tank sensor measures <em>surface storage</em>, NOT direct groundwater recharge.
-                Groundwater level changes require dedicated piezometer or well measurements.
+                <strong>Aquifer Recharge Distinction:</strong> A water-level sensor in a storage tank or pond strictly measures <em>surface water retention</em>.
+                It does <strong>NOT</strong> measure, demonstrate, or prove regional groundwater recharge.
+                Groundwater table dynamics require independent hydrogeological monitoring via dedicated observation dug wells or piezometers.
               </li>
             </ul>
           </div>

@@ -28,7 +28,7 @@ const EMPTY_ASSET: Omit<Asset, 'id' | 'createdAt' | 'updatedAt'> = {
   tankWidthM: null,
   tankDepthM: null,
   notes: '',
-  dataSource: 'Local field entry',
+  dataSource: 'Not verified / demonstration entry',
   isSimulated: false,
 };
 
@@ -572,6 +572,48 @@ export const AssetRegisterPage: React.FC<AssetRegisterPageProps> = ({
                     type="date"
                     value={formData.installationDate}
                     onChange={e => setFormData({ ...formData, installationDate: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="modal-source-cat">Data Source / Verification Standard</label>
+                  <select
+                    id="modal-source-cat"
+                    value={
+                      formData.dataSource.startsWith('Field visit') ? 'Field visit assessment' :
+                      formData.dataSource.startsWith('Not verified') ? 'Not verified / demonstration entry' :
+                      formData.dataSource.startsWith('Gram Panchayat') ? 'Gram Panchayat records' :
+                      formData.dataSource.startsWith('Public GIS') ? 'Public GIS / Bhuvan portal' :
+                      formData.dataSource.startsWith('Community') ? 'Community consultation' :
+                      'Other / Custom'
+                    }
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val === 'Other / Custom') {
+                        setFormData({ ...formData, dataSource: 'Custom source entry' });
+                      } else {
+                        setFormData({ ...formData, dataSource: val });
+                      }
+                    }}
+                  >
+                    <option value="Not verified / demonstration entry">Not verified / demonstration entry</option>
+                    <option value="Field visit assessment">Field visit assessment</option>
+                    <option value="Gram Panchayat records">Gram Panchayat records</option>
+                    <option value="Public GIS / Bhuvan portal">Public GIS / Bhuvan portal</option>
+                    <option value="Community consultation">Community consultation</option>
+                    <option value="Other / Custom">Other / Custom</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="modal-source-val">Source Specification / Field Notes</label>
+                  <input
+                    id="modal-source-val"
+                    type="text"
+                    placeholder="e.g. Demonstration record, or GP survey ref 2026-Q1"
+                    value={formData.dataSource}
+                    onChange={e => setFormData({ ...formData, dataSource: e.target.value })}
                   />
                 </div>
               </div>
