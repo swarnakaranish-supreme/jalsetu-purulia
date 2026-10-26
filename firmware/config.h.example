@@ -1,0 +1,48 @@
+/**
+ * ============================================================================
+ * JalSetu Purulia — ESP32 Sensor Prototype Configuration
+ * 
+ * Instructions:
+ * 1. Copy this file to "config.h"
+ * 2. Set your local pin configuration and calibrated tank dimensions
+ * 3. Never commit passwords or private tokens to public repositories!
+ * ============================================================================
+ */
+
+#ifndef JALSETU_CONFIG_H
+#define JALSETU_CONFIG_H
+
+// --- Hardware Pin Definitions ---
+// Typical pins for ESP32 DevKit v1 connected to HC-SR04 / JSN-SR04T
+#define PIN_TRIGGER        5     // Ultrasonic trigger pin (Output)
+#define PIN_ECHO           18    // Ultrasonic echo pin (Input)
+#define PIN_STATUS_LED     2     // Onboard status LED (blinks on reading)
+#define PIN_OVERFLOW_LED   4     // Optional warning LED for overflow condition
+
+// --- Tank Physical Geometry (Calibrated in Centimetres) ---
+// Note: For vertical-sided rectangular tanks
+#define TANK_DEPTH_CM      200.0 // Distance from sensor face to tank floor (cm)
+#define SENSOR_OFFSET_CM   15.0  // Clearance between sensor face and max water level (cm)
+#define TANK_LENGTH_M      4.0   // Internal length (metres)
+#define TANK_WIDTH_M       2.5   // Internal width (metres)
+
+// --- Measurement Intervals ---
+#define READING_INTERVAL_MS 10000 // Measurement cadence (10 seconds for bench test; 15-60 min for field)
+#define SAMPLES_PER_READING 5     // Number of pings averaged for noise filtering
+
+// --- Plausibility Thresholds ---
+#define MIN_PLAUSIBLE_CM   2.0    // Closer than 2cm is sensor blind-zone / invalid
+#define MAX_PLAUSIBLE_CM   450.0  // Beyond 450cm is out of sensor range for HC-SR04
+
+// --- Optional Connectivity Mode ---
+// Set to false for offline standalone serial logging mode (recommended for offline remote villages)
+#define ENABLE_WIFI_UPLOAD false
+
+#if ENABLE_WIFI_UPLOAD
+// Fill these ONLY in your local uncommitted config.h
+#define WIFI_SSID          "YOUR_WIFI_SSID"
+#define WIFI_PASSWORD      "YOUR_WIFI_PASSWORD"
+#define INGEST_ENDPOINT    "http://192.168.1.100:3000/api/ingest"
+#endif
+
+#endif // JALSETU_CONFIG_H
