@@ -63,6 +63,9 @@ describe('Site Screening Method', () => {
     expect(res.factors.length).toBe(8);
     expect(res.recommendation).toContain('favourable preliminary characteristics');
     expect(res.warnings.some(w => w.includes('provisional demonstration heuristic'))).toBe(true);
+    expect(res.status).toBe('favourable');
+    expect(res.positiveFactors.length).toBeGreaterThan(0);
+    expect(res.recommendedNextSteps.length).toBeGreaterThan(0);
 
     // Verify all factors provide screening impact explanations
     res.factors.forEach(f => {
@@ -85,6 +88,7 @@ describe('Site Screening Method', () => {
     expect(res.recommendation).toContain('Insufficient information for assessment');
     expect(res.recommendation).toContain('Do not interpret a low score under incomplete data as poor site quality');
     expect(res.warnings.some(w => w.includes('Critical baseline information is missing'))).toBe(true);
+    expect(res.status).toBe('insufficient_data');
   });
 
   it('marks site as insufficient even if only one critical parameter (e.g. Catchment Area) is missing', () => {
@@ -140,5 +144,52 @@ describe('Site Screening Method', () => {
     const landFactor = res.factors.find(f => f.name === 'Land Ownership & Permission');
     expect(landFactor?.score).toBe(1);
     expect(landFactor?.reasoning).toContain('Disputed ownership');
+  });
+
+  it('incorporates social equity and drinking water priority', () => {
+    const highEquitySite: SiteAssessment = {
+      ...completeSite,
+      id: 'equity-site',
+      equityPriority: 'high',
+      communityNeed: 'Acute drinking water scarcity in underserved hamlet',
+    };
+    const res = screenSite(highEquitySite);
+    expect(res.positiveFactors.some(p => p.includes('drinking water vulnerability'))).toBe(true);
+  });
+
+  it('detects reported water-quality risks and flags them in constraints and recommended steps', () => {
+    const riskSite: SiteAssessment = {
+      ...completeSite,
+      id: 'wq-risk-site',
+      waterQualityConcerns: 'High fluoride suspected from nearby tube wells (1.8 mg/L)',
+    };
+    const res = screenSite(riskSite);
+    expect(res.constraintsAndRisks.some(c => c.includes('fluoride'))).toBe(true);
+    expect(res.recommendedNextSteps.some(s => s.includes('NABL/PHED certified'))).toBe(true);
+  });
+
+  it('distinguishes recharge feasibility across hard rock, clay, and weathered laterite formations', () => {
+    const rockySite: SiteAssessment = {
+      ...completeSite,
+      soilType: 'rocky',
+      geologyInfo: 'Massive crystalline granite-gneiss basement',
+    };
+    const rockyRes = screenSite(rockySite);
+    expect(rockyRes.rechargeFeasibilityNote).toContain('Impermeable crystalline hard-rock basement');
+    expect(rockyRes.rechargeFeasibilityNote).toContain('NOT recommended without secondary fracture geophysics');
+
+    const claySite: SiteAssessment = {
+      ...completeSite,
+      soilType: 'clay',
+    };
+    const clayRes = screenSite(claySite);
+    expect(clayRes.rechargeFeasibilityNote).toContain('Heavy clay soil has very low infiltration');
+
+    const lateriteSite: SiteAssessment = {
+      ...completeSite,
+      soilType: 'laterite',
+    };
+    const lateriteRes = screenSite(lateriteSite);
+    expect(lateriteRes.rechargeFeasibilityNote).toContain('Weathered mantle or alluvial soil permits natural sub-surface percolation');
   });
 });

@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import type { Asset, AssetType, AssetCondition, MaintenanceStatus } from '../types';
 import { generateId, exportAssetsToCSV } from '../lib/storage';
+import { validateCoordinates } from '../lib/calculations';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { NoticeBanner } from '../components/NoticeBanner';
 
@@ -11,14 +13,41 @@ interface AssetRegisterPageProps {
   isSimulated: boolean;
 }
 
+const PURULIA_BLOCKS = [
+  'Arsha',
+  'Baghmundi',
+  'Balarampur',
+  'Barabazar',
+  'Bundwan',
+  'Hura',
+  'Jaipur',
+  'Jhalda-I',
+  'Jhalda-II',
+  'Kashipur',
+  'Manbazar-I',
+  'Manbazar-II',
+  'Neturia',
+  'Para',
+  'Puncha',
+  'Purulia-I',
+  'Purulia-II',
+  'Raghunathpur-I',
+  'Raghunathpur-II',
+  'Santuri',
+];
+
 const EMPTY_ASSET: Omit<Asset, 'id' | 'createdAt' | 'updatedAt'> = {
   name: '',
   type: 'rooftop_rwh',
-  block: '',
+  block: 'Purulia-I',
   village: '',
   latitude: null,
   longitude: null,
   installationDate: '',
+  commissioningAuthority: '',
+  lastInspectionDate: '',
+  nextInspectionDate: '',
+  evidenceSource: 'Field GPS survey and physical inspection',
   condition: 'good',
   responsibleOrg: '',
   maintenanceStatus: 'none_required',
@@ -28,7 +57,7 @@ const EMPTY_ASSET: Omit<Asset, 'id' | 'createdAt' | 'updatedAt'> = {
   tankWidthM: null,
   tankDepthM: null,
   notes: '',
-  dataSource: 'Not verified / demonstration entry',
+  dataSource: 'Field visit register',
   isSimulated: false,
 };
 
@@ -39,27 +68,45 @@ export const AssetRegisterPage: React.FC<AssetRegisterPageProps> = ({
   isSimulated,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterBlock, setFilterBlock] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterCondition, setFilterCondition] = useState<string>('all');
+  const [filterInspection, setFilterInspection] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [formData, setFormData] = useState(EMPTY_ASSET);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [selectedAssetDetail, setSelectedAssetDetail] = useState<Asset | null>(null);
 
+  const todayStr = new Date().toISOString().substring(0, 10);
+
   // Filtered Assets
-  const filteredAssets = assets.filter(a => {
-    const matchesSearch =
-      a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.block.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.village.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.id.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredAssets = useMemo(() => {
+    return assets.filter(a => {
+      const matchesSearch =
+        a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        a.block.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        a.village.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        a.id.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesType = filterType === 'all' || a.type === filterType;
-    const matchesCondition = filterCondition === 'all' || a.condition === filterCondition;
+      const matchesBlock = filterBlock === 'all' || a.block.toLowerCase() === filterBlock.toLowerCase();
+      const matchesType = filterType === 'all' || a.type === filterType;
+      const matchesCondition = filterCondition === 'all' || a.condition === filterCondition;
 
-    return matchesSearch && matchesType && matchesCondition;
-  });
+      let matchesInspection = true;
+      if (filterInspection === 'overdue') {
+        matchesInspection =
+          a.maintenanceStatus === 'overdue' ||
+          (!!a.nextInspectionDate && a.nextInspectionDate < todayStr);
+      } else if (filterInspection === 'scheduled') {
+        matchesInspection =
+          a.maintenanceStatus === 'scheduled' ||
+          (!!a.nextInspectionDate && a.nextInspectionDate >= todayStr);
+      }
+
+      return matchesSearch && matchesBlock && matchesType && matchesCondition && matchesInspection;
+    });
+  }, [assets, searchQuery, filterBlock, filterType, filterCondition, filterInspection, todayStr]);
 
   const handleOpenCreate = () => {
     setFormData(EMPTY_ASSET);
@@ -76,6 +123,10 @@ export const AssetRegisterPage: React.FC<AssetRegisterPageProps> = ({
       latitude: asset.latitude,
       longitude: asset.longitude,
       installationDate: asset.installationDate,
+      commissioningAuthority: asset.commissioningAuthority || '',
+      lastInspectionDate: asset.lastInspectionDate || '',
+      nextInspectionDate: asset.nextInspectionDate || '',
+      evidenceSource: asset.evidenceSource || 'Field GPS survey and physical inspection',
       condition: asset.condition,
       responsibleOrg: asset.responsibleOrg,
       maintenanceStatus: asset.maintenanceStatus,
@@ -101,7 +152,7 @@ export const AssetRegisterPage: React.FC<AssetRegisterPageProps> = ({
 
     const assetToSave: Asset = {
       ...formData,
-      id: editingAssetId || `asset-${generateId().substring(0, 8)}`,
+      id: editingAssetId || generateId(),
       createdAt: editingAssetId
         ? assets.find(a => a.id === editingAssetId)?.createdAt || new Date().toISOString()
         : new Date().toISOString(),
@@ -112,52 +163,39 @@ export const AssetRegisterPage: React.FC<AssetRegisterPageProps> = ({
     setIsModalOpen(false);
   };
 
-  const handleDownloadCSV = () => {
-    const csvContent = exportAssetsToCSV();
-    if (!csvContent) {
-      alert('No asset records to export.');
+  const handleExportCSV = () => {
+    const csv = exportAssetsToCSV();
+    if (!csv) {
+      alert('No assets to export.');
       return;
     }
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `jalsetu_purulia_assets_${new Date().toISOString().substring(0, 10)}.csv`);
-    document.body.appendChild(link);
+    link.href = url;
+    link.download = `jalsetu_asset_register_${todayStr}.csv`;
     link.click();
-    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
-  const handleDownloadJSON = () => {
-    const jsonContent = JSON.stringify(assets, null, 2);
-    const blob = new Blob([jsonContent], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `jalsetu_purulia_assets_${new Date().toISOString().substring(0, 10)}.json`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  // Form coordinate check
+  const coordCheck = validateCoordinates(formData.latitude, formData.longitude);
 
   return (
     <div>
       <div className="page-header">
         <div>
-          <h1>Water Conservation Asset Register</h1>
+          <h1>Water Asset Register</h1>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-            Local registry of existing rainwater structures, ponds, check dams, and storage tanks.
+            Comprehensive registry of water harvesting, storage, and conservation structures across Purulia District.
           </p>
         </div>
         <div className="btn-group">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={handleDownloadCSV}>
-            Export CSV
-          </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={handleDownloadJSON}>
-            Export JSON
-          </button>
           <button type="button" className="btn btn-primary btn-sm" onClick={handleOpenCreate}>
             + Register New Asset
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={handleExportCSV}>
+            Export CSV
           </button>
         </div>
       </div>
@@ -165,383 +203,435 @@ export const AssetRegisterPage: React.FC<AssetRegisterPageProps> = ({
       <div className="page-body">
         <NoticeBanner isSimulated={isSimulated} />
 
-        {/* Local Storage Clarification Banner */}
-        <div style={{ background: '#e8f4f8', border: '1px solid #b8dae6', padding: '0.65rem 1rem', borderRadius: 'var(--radius)', fontSize: '0.8125rem', color: '#1a5276', marginBottom: '1.25rem' }}>
-          <strong>Local Storage Architecture: </strong>
-          All records shown below are saved directly into your current web browser's local storage (`localStorage`).
-          They do not require internet access or an account, but are private to this machine and browser instance.
-        </div>
+        {/* Filter Controls Bar */}
+        <div
+          className="card"
+          style={{
+            marginBottom: '1.25rem',
+            padding: '1rem',
+            display: 'flex',
+            gap: '1rem',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}
+        >
+          {/* Search */}
+          <div style={{ flex: '1 1 200px' }}>
+            <input
+              type="text"
+              placeholder="Search by name, block, village, or ID..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{ width: '100%', fontSize: '0.8125rem' }}
+            />
+          </div>
 
-        {/* Search & Filters */}
-        <div className="card" style={{ marginBottom: '1.5rem', padding: '1rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1rem' }}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label htmlFor="search-input">Search Assets</label>
-              <input
-                id="search-input"
-                type="text"
-                placeholder="Search by name, block, village, or ID..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-              />
-            </div>
+          {/* Block */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <label htmlFor="filter-asset-block" style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+              Block:
+            </label>
+            <select
+              id="filter-asset-block"
+              value={filterBlock}
+              onChange={e => setFilterBlock(e.target.value)}
+              style={{ fontSize: '0.8125rem', padding: '3px 8px', borderRadius: 'var(--radius)' }}
+            >
+              <option value="all">All Blocks</option>
+              {PURULIA_BLOCKS.map(b => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          </div>
 
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label htmlFor="filter-type">Filter by Asset Type</label>
-              <select
-                id="filter-type"
-                value={filterType}
-                onChange={e => setFilterType(e.target.value)}
-              >
-                <option value="all">All Types</option>
-                <option value="rooftop_rwh">Rooftop RWH</option>
-                <option value="pond">Pond / Tank</option>
-                <option value="farm_pond">Farm Pond</option>
-                <option value="check_dam">Check Dam</option>
-                <option value="percolation_tank">Percolation Tank</option>
-                <option value="recharge_shaft">Recharge Shaft</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
+          {/* Type */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <label htmlFor="filter-asset-type" style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+              Type:
+            </label>
+            <select
+              id="filter-asset-type"
+              value={filterType}
+              onChange={e => setFilterType(e.target.value)}
+              style={{ fontSize: '0.8125rem', padding: '3px 8px', borderRadius: 'var(--radius)' }}
+            >
+              <option value="all">All Types</option>
+              <option value="rooftop_rwh">Rooftop RWH</option>
+              <option value="pond">Pond / Traditional Bandh</option>
+              <option value="farm_pond">Farm Pond (Hapa)</option>
+              <option value="check_dam">Check Dam</option>
+              <option value="percolation_tank">Percolation Tank</option>
+              <option value="contour_trench">Contour Trench</option>
+            </select>
+          </div>
 
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label htmlFor="filter-condition">Filter by Condition</label>
-              <select
-                id="filter-condition"
-                value={filterCondition}
-                onChange={e => setFilterCondition(e.target.value)}
-              >
-                <option value="all">All Conditions</option>
-                <option value="good">Good</option>
-                <option value="fair">Fair</option>
-                <option value="poor">Poor</option>
-                <option value="non_functional">Non-functional</option>
-                <option value="unknown">Unknown</option>
-              </select>
-            </div>
+          {/* Condition */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <label htmlFor="filter-asset-cond" style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+              Condition:
+            </label>
+            <select
+              id="filter-asset-cond"
+              value={filterCondition}
+              onChange={e => setFilterCondition(e.target.value)}
+              style={{ fontSize: '0.8125rem', padding: '3px 8px', borderRadius: 'var(--radius)' }}
+            >
+              <option value="all">All Conditions</option>
+              <option value="good">Good</option>
+              <option value="fair">Fair</option>
+              <option value="poor">Poor</option>
+              <option value="non_functional">Non-functional</option>
+            </select>
+          </div>
+
+          {/* Inspection Filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <label htmlFor="filter-asset-insp" style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+              Inspection:
+            </label>
+            <select
+              id="filter-asset-insp"
+              value={filterInspection}
+              onChange={e => setFilterInspection(e.target.value)}
+              style={{ fontSize: '0.8125rem', padding: '3px 8px', borderRadius: 'var(--radius)' }}
+            >
+              <option value="all">All Inspection Statuses</option>
+              <option value="overdue">Overdue for Inspection</option>
+              <option value="scheduled">Scheduled / Up to date</option>
+            </select>
+          </div>
+
+          <div style={{ marginLeft: 'auto', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+            Showing {filteredAssets.length} of {assets.length} assets
           </div>
         </div>
 
-        {/* Assets Table */}
+        {/* Asset Table */}
         <div className="card">
-          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2>Registered Assets ({filteredAssets.length})</h2>
-            <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-              Showing {filteredAssets.length} of {assets.length} total
-            </span>
-          </div>
-
-          {filteredAssets.length === 0 ? (
-            <div className="empty-state">
-              <p>No matching asset records found.</p>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={handleOpenCreate}>
-                Register First Asset
-              </button>
-            </div>
-          ) : (
+          {filteredAssets.length > 0 ? (
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Asset ID / Name</th>
+                    <th>Asset Name</th>
                     <th>Type</th>
-                    <th>Location (Block / Village)</th>
+                    <th>Location</th>
+                    <th>Capacity / Dimensions</th>
                     <th>Condition</th>
-                    <th>Maintenance</th>
-                    <th>Capacity / Dims</th>
-                    <th>Responsible Person / Org</th>
+                    <th>Inspection &amp; Maintenance</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAssets.map(asset => (
-                    <tr key={asset.id}>
-                      <td>
-                        <strong>{asset.name}</strong>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                          ID: {asset.id}
-                        </div>
-                        {asset.isSimulated && (
-                          <span className="badge badge--simulated" style={{ marginTop: '3px' }}>Simulated</span>
-                        )}
-                      </td>
-                      <td>{asset.type.replace('_', ' ')}</td>
-                      <td>
-                        {asset.block || '—'}{asset.village ? `, ${asset.village}` : ''}
-                        {asset.latitude !== null && asset.longitude !== null && (
-                          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                            {asset.latitude.toFixed(4)}, {asset.longitude.toFixed(4)}
+                  {filteredAssets.map(asset => {
+                    const isOverdue =
+                      asset.maintenanceStatus === 'overdue' ||
+                      (asset.nextInspectionDate && asset.nextInspectionDate < todayStr);
+
+                    return (
+                      <tr key={asset.id}>
+                        <td>
+                          <strong>{asset.name}</strong>
+                          {asset.isSimulated && (
+                            <span style={{ marginLeft: '6px', fontSize: '10px', background: '#fcf3cf', color: '#7d6608', padding: '1px 4px', borderRadius: '3px' }}>
+                              SIMULATED
+                            </span>
+                          )}
+                          <div style={{ fontSize: '0.75rem', color: '#666' }}>ID: {asset.id}</div>
+                        </td>
+                        <td>{asset.type.replace('_', ' ')}</td>
+                        <td>
+                          {asset.block}
+                          {asset.village ? `, ${asset.village}` : ''}
+                          {asset.latitude !== null && (
+                            <div style={{ fontSize: '0.725rem', color: '#888' }}>
+                              {asset.latitude.toFixed(3)}°N, {asset.longitude?.toFixed(3)}°E
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          {asset.storageCapacityLitres ? `${asset.storageCapacityLitres.toLocaleString()} L` : '—'}
+                          {asset.catchmentAreaSqm && (
+                            <div style={{ fontSize: '0.725rem', color: '#666' }}>
+                              Catchment: {asset.catchmentAreaSqm} m²
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <span className={`badge badge--${asset.condition}`}>
+                            {asset.condition}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`badge badge--${isOverdue ? 'overdue' : asset.maintenanceStatus}`}>
+                            {isOverdue ? 'Inspection Overdue' : asset.maintenanceStatus.replace('_', ' ')}
+                          </span>
+                          {asset.nextInspectionDate && (
+                            <div style={{ fontSize: '0.725rem', color: isOverdue ? '#c0392b' : '#666', marginTop: '2px' }}>
+                              Next: {asset.nextInspectionDate}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.4rem' }}>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-secondary"
+                              onClick={() => setSelectedAssetDetail(asset)}
+                            >
+                              Details
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-secondary"
+                              onClick={() => handleOpenEdit(asset)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              style={{ color: '#c0392b' }}
+                              onClick={() => setDeleteTargetId(asset.id)}
+                            >
+                              Delete
+                            </button>
                           </div>
-                        )}
-                      </td>
-                      <td>
-                        <span className={`badge badge--${asset.condition}`}>
-                          {asset.condition}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`badge badge--${asset.maintenanceStatus}`}>
-                          {asset.maintenanceStatus.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td>
-                        {asset.storageCapacityLitres
-                          ? `${asset.storageCapacityLitres.toLocaleString()} L`
-                          : asset.tankLengthM && asset.tankWidthM && asset.tankDepthM
-                          ? `${asset.tankLengthM}m × ${asset.tankWidthM}m × ${asset.tankDepthM}m`
-                          : '—'}
-                      </td>
-                      <td>{asset.responsibleOrg || '—'}</td>
-                      <td>
-                        <div className="btn-group">
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => setSelectedAssetDetail(asset)}
-                          >
-                            View
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => handleOpenEdit(asset)}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-danger btn-sm"
-                            onClick={() => setDeleteTargetId(asset.id)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Detail Modal */}
-      {selectedAssetDetail && (
-        <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal" style={{ maxWidth: '580px' }}>
-            <h2>Asset Details: {selectedAssetDetail.name}</h2>
-            <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginBottom: '1rem', lineHeight: 1.6 }}>
-              <p><strong>Asset ID:</strong> {selectedAssetDetail.id}</p>
-              <p><strong>Type:</strong> {selectedAssetDetail.type.replace('_', ' ')}</p>
-              <p><strong>Location:</strong> {selectedAssetDetail.block || 'Unspecified'}, {selectedAssetDetail.village || ''}</p>
-              <p><strong>Coordinates:</strong> {selectedAssetDetail.latitude ?? '—'}, {selectedAssetDetail.longitude ?? '—'}</p>
-              <p><strong>Condition:</strong> {selectedAssetDetail.condition}</p>
-              <p><strong>Maintenance Status:</strong> {selectedAssetDetail.maintenanceStatus}</p>
-              <p><strong>Storage Capacity:</strong> {selectedAssetDetail.storageCapacityLitres ? `${selectedAssetDetail.storageCapacityLitres} Litres` : 'Not calibrated'}</p>
-              {selectedAssetDetail.tankLengthM && selectedAssetDetail.tankWidthM && (
-                <p><strong>Tank Dimensions (L × W × D):</strong> {selectedAssetDetail.tankLengthM}m × {selectedAssetDetail.tankWidthM}m × {selectedAssetDetail.tankDepthM ?? '?'}m</p>
-              )}
-              <p><strong>Responsible Entity:</strong> {selectedAssetDetail.responsibleOrg || 'None recorded'}</p>
-              <p><strong>Installation Date:</strong> {selectedAssetDetail.installationDate || 'Unknown'}</p>
-              <p><strong>Data Source:</strong> {selectedAssetDetail.dataSource}</p>
-              <p><strong>Notes:</strong> {selectedAssetDetail.notes || 'No notes'}</p>
-            </div>
-            <div className="btn-group" style={{ justifyContent: 'flex-end' }}>
+          ) : (
+            <div className="empty-state" style={{ padding: '2.5rem', textAlign: 'center' }}>
+              <p>No water assets match the selected filters or search query.</p>
               <button
                 type="button"
-                className="btn btn-secondary"
-                onClick={() => setSelectedAssetDetail(null)}
+                className="btn btn-primary btn-sm"
+                style={{ marginTop: '0.75rem' }}
+                onClick={handleOpenCreate}
               >
-                Close
+                Register First Asset
               </button>
             </div>
-          </div>
+          )}
         </div>
-      )}
 
-      {/* Create / Edit Modal */}
-      {isModalOpen && (
-        <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal" style={{ maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2>{editingAssetId ? 'Edit Water Asset' : 'Register New Water Asset'}</h2>
-            <form onSubmit={handleFormSubmit}>
-              <div className="form-group">
-                <label htmlFor="modal-asset-name">Asset Name *</label>
-                <input
-                  id="modal-asset-name"
-                  type="text"
-                  required
-                  placeholder="e.g. Village Primary School Tank, North Nala Check Dam"
-                  value={formData.name}
-                  onChange={e => setFormData({ ...formData, name: e.target.value })}
-                />
+        {/* Modal: Create or Edit Asset */}
+        {isModalOpen && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              padding: '1rem',
+            }}
+          >
+            <div
+              className="card"
+              style={{
+                maxWidth: '740px',
+                width: '100%',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                padding: '1.5rem',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+                <h2 style={{ fontSize: '1.2rem', color: 'var(--color-primary-dark)' }}>
+                  {editingAssetId ? 'Edit Water Asset Record' : 'Register New Water Asset'}
+                </h2>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => setIsModalOpen(false)}
+                >
+                  ✕
+                </button>
               </div>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="modal-asset-type">Asset Type</label>
-                  <select
-                    id="modal-asset-type"
-                    value={formData.type}
-                    onChange={e => setFormData({ ...formData, type: e.target.value as AssetType })}
-                  >
-                    <option value="rooftop_rwh">Rooftop RWH</option>
-                    <option value="pond">Pond / Tank</option>
-                    <option value="farm_pond">Farm Pond</option>
-                    <option value="check_dam">Check Dam</option>
-                    <option value="percolation_tank">Percolation Tank</option>
-                    <option value="recharge_shaft">Recharge Shaft</option>
-                    <option value="channel">Drainage Channel</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label htmlFor="modal-condition">Condition</label>
-                  <select
-                    id="modal-condition"
-                    value={formData.condition}
-                    onChange={e => setFormData({ ...formData, condition: e.target.value as AssetCondition })}
-                  >
-                    <option value="good">Good</option>
-                    <option value="fair">Fair (Desilting/repair needed)</option>
-                    <option value="poor">Poor (Breached/heavily silted)</option>
-                    <option value="non_functional">Non-functional</option>
-                    <option value="unknown">Unknown</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="modal-block">Block</label>
-                  <input
-                    id="modal-block"
-                    type="text"
-                    placeholder="e.g. Purulia-I, Balarampur, Kashipur"
-                    value={formData.block}
-                    onChange={e => setFormData({ ...formData, block: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="modal-village">Village / Locality</label>
-                  <input
-                    id="modal-village"
-                    type="text"
-                    value={formData.village}
-                    onChange={e => setFormData({ ...formData, village: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="modal-lat">Latitude</label>
-                  <input
-                    id="modal-lat"
-                    type="number"
-                    step="0.0001"
-                    placeholder="e.g. 23.3320"
-                    value={formData.latitude ?? ''}
-                    onChange={e =>
-                      setFormData({ ...formData, latitude: e.target.value === '' ? null : parseFloat(e.target.value) })
-                    }
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="modal-lon">Longitude</label>
-                  <input
-                    id="modal-lon"
-                    type="number"
-                    step="0.0001"
-                    placeholder="e.g. 86.3650"
-                    value={formData.longitude ?? ''}
-                    onChange={e =>
-                      setFormData({ ...formData, longitude: e.target.value === '' ? null : parseFloat(e.target.value) })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="modal-capacity">Storage Capacity (Litres, if known)</label>
-                  <input
-                    id="modal-capacity"
-                    type="number"
-                    min="0"
-                    placeholder="e.g. 10000"
-                    value={formData.storageCapacityLitres ?? ''}
-                    onChange={e =>
-                      setFormData({
-                        ...formData,
-                        storageCapacityLitres: e.target.value === '' ? null : parseFloat(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="modal-maint-status">Maintenance Status</label>
-                  <select
-                    id="modal-maint-status"
-                    value={formData.maintenanceStatus}
-                    onChange={e =>
-                      setFormData({ ...formData, maintenanceStatus: e.target.value as MaintenanceStatus })
-                    }
-                  >
-                    <option value="none_required">None Required</option>
-                    <option value="scheduled">Scheduled</option>
-                    <option value="overdue">Overdue</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="unknown">Unknown</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ padding: '0.75rem', background: 'var(--color-sand)', borderRadius: 'var(--radius)', marginBottom: '1rem' }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>
-                  Tank Internal Dimensions (For vertical-sided rectangular tanks only)
-                </span>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label htmlFor="tank-len" style={{ fontSize: '0.75rem' }}>Length (m)</label>
+              <form onSubmit={handleFormSubmit}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  {/* Name */}
+                  <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                    <label htmlFor="asset-name">Asset Name *</label>
                     <input
-                      id="tank-len"
+                      id="asset-name"
+                      type="text"
+                      required
+                      placeholder="e.g. Lagda High School Rooftop RWH, Sirkabad Community Bandh"
+                      value={formData.name}
+                      onChange={e => setFormData({ ...formData, name: e.target.value })}
+                    />
+                  </div>
+
+                  {/* Type */}
+                  <div className="form-group">
+                    <label htmlFor="asset-type">Asset Type *</label>
+                    <select
+                      id="asset-type"
+                      value={formData.type}
+                      onChange={e => setFormData({ ...formData, type: e.target.value as AssetType })}
+                    >
+                      <option value="rooftop_rwh">Rooftop Rainwater Harvesting</option>
+                      <option value="pond">Pond / Traditional Bandh</option>
+                      <option value="farm_pond">Farm Pond (Hapa)</option>
+                      <option value="check_dam">Check Dam / Nala Bund</option>
+                      <option value="percolation_tank">Percolation Tank</option>
+                      <option value="recharge_shaft">Recharge Shaft / Injection Well</option>
+                      <option value="contour_trench">Contour Trench / Gully Check</option>
+                      <option value="other">Other Water Structure</option>
+                    </select>
+                  </div>
+
+                  {/* Block */}
+                  <div className="form-group">
+                    <label htmlFor="asset-block">Block *</label>
+                    <select
+                      id="asset-block"
+                      value={formData.block}
+                      onChange={e => setFormData({ ...formData, block: e.target.value })}
+                    >
+                      {PURULIA_BLOCKS.map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Village */}
+                  <div className="form-group">
+                    <label htmlFor="asset-village">Village / Hamlet</label>
+                    <input
+                      id="asset-village"
+                      type="text"
+                      placeholder="e.g. Lagda, Sirkabad"
+                      value={formData.village}
+                      onChange={e => setFormData({ ...formData, village: e.target.value })}
+                    />
+                  </div>
+
+                  {/* Commissioning Authority */}
+                  <div className="form-group">
+                    <label htmlFor="asset-comm">Commissioning Authority / Scheme</label>
+                    <input
+                      id="asset-comm"
+                      type="text"
+                      placeholder="e.g. MGNREGS, Jal Dharo-Jal Bharo, Untied Fund"
+                      value={formData.commissioningAuthority || ''}
+                      onChange={e => setFormData({ ...formData, commissioningAuthority: e.target.value })}
+                    />
+                  </div>
+
+                  {/* Coordinates */}
+                  <div className="form-group">
+                    <label htmlFor="asset-lat">Latitude (°N)</label>
+                    <input
+                      id="asset-lat"
                       type="number"
-                      step="0.1"
-                      min="0"
-                      value={formData.tankLengthM ?? ''}
+                      step="0.0001"
+                      placeholder="e.g. 23.3320"
+                      value={formData.latitude ?? ''}
                       onChange={e =>
                         setFormData({
                           ...formData,
-                          tankLengthM: e.target.value === '' ? null : parseFloat(e.target.value),
+                          latitude: e.target.value === '' ? null : parseFloat(e.target.value),
                         })
                       }
                     />
                   </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label htmlFor="tank-wid" style={{ fontSize: '0.75rem' }}>Width (m)</label>
+
+                  <div className="form-group">
+                    <label htmlFor="asset-lon">Longitude (°E)</label>
                     <input
-                      id="tank-wid"
+                      id="asset-lon"
                       type="number"
-                      step="0.1"
-                      min="0"
-                      value={formData.tankWidthM ?? ''}
+                      step="0.0001"
+                      placeholder="e.g. 86.3650"
+                      value={formData.longitude ?? ''}
                       onChange={e =>
                         setFormData({
                           ...formData,
-                          tankWidthM: e.target.value === '' ? null : parseFloat(e.target.value),
+                          longitude: e.target.value === '' ? null : parseFloat(e.target.value),
                         })
                       }
                     />
                   </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label htmlFor="tank-dep" style={{ fontSize: '0.75rem' }}>Max Depth (m)</label>
+                </div>
+
+                {/* Coordinate feedback */}
+                {formData.latitude !== null && formData.longitude !== null && (
+                  <div
+                    style={{
+                      fontSize: '0.75rem',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      marginBottom: '1rem',
+                      background: coordCheck.inPuruliaDistrict ? '#eafaf1' : '#fef9e7',
+                      color: coordCheck.inPuruliaDistrict ? '#145a32' : '#7d6608',
+                      border: '1px solid currentColor',
+                    }}
+                  >
+                    📍 {coordCheck.message}
+                  </div>
+                )}
+
+                {/* Dimensions & Capacity */}
+                <h3 style={{ fontSize: '0.95rem', marginTop: '1rem', marginBottom: '0.5rem', color: 'var(--color-primary)' }}>
+                  Capacity &amp; Physical Dimensions
+                </h3>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label htmlFor="asset-cap">Capacity (Litres)</label>
                     <input
-                      id="tank-dep"
+                      id="asset-cap"
+                      type="number"
+                      min="0"
+                      placeholder="e.g. 10000"
+                      value={formData.storageCapacityLitres ?? ''}
+                      onChange={e =>
+                        setFormData({
+                          ...formData,
+                          storageCapacityLitres: e.target.value === '' ? null : parseFloat(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="asset-catchment">Catchment Area (m²)</label>
+                    <input
+                      id="asset-catchment"
+                      type="number"
+                      min="0"
+                      placeholder="e.g. 200"
+                      value={formData.catchmentAreaSqm ?? ''}
+                      onChange={e =>
+                        setFormData({
+                          ...formData,
+                          catchmentAreaSqm: e.target.value === '' ? null : parseFloat(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="asset-depth">Max Depth (metres)</label>
+                    <input
+                      id="asset-depth"
                       type="number"
                       step="0.1"
                       min="0"
+                      placeholder="e.g. 2.5"
                       value={formData.tankDepthM ?? ''}
                       onChange={e =>
                         setFormData({
@@ -552,112 +642,208 @@ export const AssetRegisterPage: React.FC<AssetRegisterPageProps> = ({
                     />
                   </div>
                 </div>
-              </div>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="modal-resp-org">Responsible Organisation / Caretaker</label>
-                  <input
-                    id="modal-resp-org"
-                    type="text"
-                    placeholder="e.g. Gram Panchayat, School Committee, WUA"
-                    value={formData.responsibleOrg}
-                    onChange={e => setFormData({ ...formData, responsibleOrg: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="modal-inst-date">Installation / Construction Date</label>
-                  <input
-                    id="modal-inst-date"
-                    type="date"
-                    value={formData.installationDate}
-                    onChange={e => setFormData({ ...formData, installationDate: e.target.value })}
-                  />
-                </div>
-              </div>
+                {/* Condition & Maintenance Status */}
+                <h3 style={{ fontSize: '0.95rem', marginTop: '1rem', marginBottom: '0.5rem', color: 'var(--color-primary)' }}>
+                  Condition, Inspection &amp; Governance
+                </h3>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="modal-source-cat">Data Source / Verification Standard</label>
-                  <select
-                    id="modal-source-cat"
-                    value={
-                      formData.dataSource.startsWith('Field visit') ? 'Field visit assessment' :
-                      formData.dataSource.startsWith('Not verified') ? 'Not verified / demonstration entry' :
-                      formData.dataSource.startsWith('Gram Panchayat') ? 'Gram Panchayat records' :
-                      formData.dataSource.startsWith('Public GIS') ? 'Public GIS / Bhuvan portal' :
-                      formData.dataSource.startsWith('Community') ? 'Community consultation' :
-                      'Other / Custom'
-                    }
-                    onChange={e => {
-                      const val = e.target.value;
-                      if (val === 'Other / Custom') {
-                        setFormData({ ...formData, dataSource: 'Custom source entry' });
-                      } else {
-                        setFormData({ ...formData, dataSource: val });
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label htmlFor="asset-condition">Physical Condition *</label>
+                    <select
+                      id="asset-condition"
+                      value={formData.condition}
+                      onChange={e => setFormData({ ...formData, condition: e.target.value as AssetCondition })}
+                    >
+                      <option value="good">Good (Fully functional)</option>
+                      <option value="fair">Fair (Minor upkeep needed)</option>
+                      <option value="poor">Poor (Requires desiltation or repair)</option>
+                      <option value="non_functional">Non-functional / Abandoned</option>
+                      <option value="unknown">Unknown / Unassessed</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="asset-maint-status">Maintenance Status *</label>
+                    <select
+                      id="asset-maint-status"
+                      value={formData.maintenanceStatus}
+                      onChange={e =>
+                        setFormData({
+                          ...formData,
+                          maintenanceStatus: e.target.value as MaintenanceStatus,
+                        })
                       }
-                    }}
-                  >
-                    <option value="Not verified / demonstration entry">Not verified / demonstration entry</option>
-                    <option value="Field visit assessment">Field visit assessment</option>
-                    <option value="Gram Panchayat records">Gram Panchayat records</option>
-                    <option value="Public GIS / Bhuvan portal">Public GIS / Bhuvan portal</option>
-                    <option value="Community consultation">Community consultation</option>
-                    <option value="Other / Custom">Other / Custom</option>
-                  </select>
+                    >
+                      <option value="none_required">None Required</option>
+                      <option value="scheduled">Scheduled for Maintenance</option>
+                      <option value="overdue">Overdue / Backlog</option>
+                      <option value="in_progress">Work In Progress</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="asset-last-insp">Last Inspection Date</label>
+                    <input
+                      id="asset-last-insp"
+                      type="date"
+                      value={formData.lastInspectionDate || ''}
+                      onChange={e => setFormData({ ...formData, lastInspectionDate: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="asset-next-insp">Next Inspection Date</label>
+                    <input
+                      id="asset-next-insp"
+                      type="date"
+                      value={formData.nextInspectionDate || ''}
+                      onChange={e => setFormData({ ...formData, nextInspectionDate: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="asset-org">Responsible Organisation / Caretaker</label>
+                    <input
+                      id="asset-org"
+                      type="text"
+                      placeholder="e.g. Gram Panchayat, School Committee, WUA"
+                      value={formData.responsibleOrg}
+                      onChange={e => setFormData({ ...formData, responsibleOrg: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="asset-evidence">Evidence Source</label>
+                    <input
+                      id="asset-evidence"
+                      type="text"
+                      placeholder="e.g. Field GPS survey, Panchayat asset register"
+                      value={formData.evidenceSource || ''}
+                      onChange={e => setFormData({ ...formData, evidenceSource: e.target.value })}
+                    />
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label htmlFor="modal-source-val">Source Specification / Field Notes</label>
-                  <input
-                    id="modal-source-val"
-                    type="text"
-                    placeholder="e.g. Demonstration record, or GP survey ref 2026-Q1"
-                    value={formData.dataSource}
-                    onChange={e => setFormData({ ...formData, dataSource: e.target.value })}
+
+                <div className="form-group" style={{ marginTop: '0.75rem' }}>
+                  <label htmlFor="asset-notes">Field Notes &amp; Observations</label>
+                  <textarea
+                    id="asset-notes"
+                    rows={2}
+                    placeholder="e.g. Rooftop downpipes in good shape; first-flush diverter cleaned in June."
+                    value={formData.notes}
+                    onChange={e => setFormData({ ...formData, notes: e.target.value })}
                   />
                 </div>
-              </div>
 
-              <div className="form-group">
-                <label htmlFor="modal-notes">Condition Notes &amp; Observations</label>
-                <textarea
-                  id="modal-notes"
-                  placeholder="e.g. Silt depth 0.4m, masonry wall intact, requires filter replacement"
-                  value={formData.notes}
-                  onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                />
-              </div>
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
+                  <button type="submit" className="btn btn-primary">
+                    {editingAssetId ? 'Update Asset' : 'Save Asset to Register'}
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
-              <div className="btn-group" style={{ justifyContent: 'flex-end', marginTop: '1rem' }}>
+        {/* Modal: View Asset Detail Card */}
+        {selectedAssetDetail && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              padding: '1rem',
+            }}
+            onClick={() => setSelectedAssetDetail(null)}
+          >
+            <div
+              className="card"
+              style={{
+                maxWidth: '650px',
+                width: '100%',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                padding: '1.5rem',
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.25rem', color: 'var(--color-primary-dark)' }}>
+                    {selectedAssetDetail.name}
+                  </h2>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
+                    {selectedAssetDetail.type.replace('_', ' ')} &bull; {selectedAssetDetail.block}, {selectedAssetDetail.village || 'Purulia'}
+                  </p>
+                </div>
                 <button
                   type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setIsModalOpen(false)}
+                  className="btn btn-sm"
+                  onClick={() => setSelectedAssetDetail(null)}
                 >
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  {editingAssetId ? 'Update Asset' : 'Save Asset'}
+                  ✕ Close
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
 
-      {/* Delete Confirmation Modal */}
-      <ConfirmModal
-        isOpen={deleteTargetId !== null}
-        title="Confirm Asset Deletion"
-        message="Are you sure you want to delete this water conservation asset? This action will permanently remove it from your local browser database."
-        onConfirm={() => {
-          if (deleteTargetId) {
-            onDeleteAsset(deleteTargetId);
-            setDeleteTargetId(null);
-          }
-        }}
-        onCancel={() => setDeleteTargetId(null)}
-      />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                <div><strong>Condition:</strong> <span className={`badge badge--${selectedAssetDetail.condition}`}>{selectedAssetDetail.condition}</span></div>
+                <div><strong>Maintenance:</strong> <span className={`badge badge--${selectedAssetDetail.maintenanceStatus}`}>{selectedAssetDetail.maintenanceStatus.replace('_', ' ')}</span></div>
+                <div><strong>Capacity:</strong> {selectedAssetDetail.storageCapacityLitres ? `${selectedAssetDetail.storageCapacityLitres.toLocaleString()} L` : 'Unspecified'}</div>
+                <div><strong>Catchment:</strong> {selectedAssetDetail.catchmentAreaSqm ? `${selectedAssetDetail.catchmentAreaSqm} m²` : 'Unspecified'}</div>
+                <div><strong>Last Inspected:</strong> {selectedAssetDetail.lastInspectionDate || 'Not recorded'}</div>
+                <div><strong>Next Inspection:</strong> {selectedAssetDetail.nextInspectionDate || 'Not scheduled'}</div>
+                <div><strong>Responsible Org:</strong> {selectedAssetDetail.responsibleOrg || 'Not specified'}</div>
+                <div><strong>Scheme / Authority:</strong> {selectedAssetDetail.commissioningAuthority || 'Not specified'}</div>
+                <div><strong>Coordinates:</strong> {selectedAssetDetail.latitude !== null ? `${selectedAssetDetail.latitude.toFixed(4)}°N, ${selectedAssetDetail.longitude?.toFixed(4)}°E` : 'Unmapped'}</div>
+                <div><strong>Evidence Source:</strong> {selectedAssetDetail.evidenceSource || selectedAssetDetail.dataSource}</div>
+              </div>
+
+              {selectedAssetDetail.notes && (
+                <div style={{ background: 'var(--color-sand)', padding: '0.75rem', borderRadius: 'var(--radius)', fontSize: '0.8125rem', marginBottom: '1rem' }}>
+                  <strong>Field Notes:</strong>
+                  <p style={{ marginTop: '0.25rem' }}>{selectedAssetDetail.notes}</p>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                <Link to="/maintenance" className="btn btn-secondary btn-sm">
+                  View Maintenance Issues &rarr;
+                </Link>
+                <Link to="/monitoring" className="btn btn-secondary btn-sm">
+                  View Water Levels &rarr;
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        <ConfirmModal
+          isOpen={deleteTargetId !== null}
+          title="Delete Registered Asset"
+          message="Are you sure you want to permanently delete this water asset record? This will also affect linked observations and maintenance records."
+          confirmLabel="Delete Asset"
+          onConfirm={() => {
+            if (deleteTargetId) {
+              onDeleteAsset(deleteTargetId);
+              setDeleteTargetId(null);
+            }
+          }}
+          onCancel={() => setDeleteTargetId(null)}
+        />
+      </div>
     </div>
   );
 };

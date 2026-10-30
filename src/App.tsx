@@ -28,6 +28,7 @@ import { MaintenancePage } from './pages/MaintenancePage';
 import { CalculatorPage } from './pages/CalculatorPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { AboutPage } from './pages/AboutPage';
+import { WorkingModelPage } from './pages/WorkingModelPage';
 
 export const App: React.FC = () => {
   const [data, setData] = useState<AppData>(() => {
@@ -145,7 +146,10 @@ export const App: React.FC = () => {
               />
             }
           />
-          <Route path="/interventions" element={<InterventionPage isSimulated={isSimulated} />} />
+          <Route
+            path="/interventions"
+            element={<InterventionPage isSimulated={isSimulated} sites={data.siteAssessments} />}
+          />
           <Route
             path="/assets"
             element={
@@ -182,6 +186,7 @@ export const App: React.FC = () => {
             }
           />
           <Route path="/calculator" element={<CalculatorPage isSimulated={isSimulated} />} />
+          <Route path="/working-model" element={<WorkingModelPage isSimulated={isSimulated} />} />
           <Route path="/reports" element={<ReportsPage data={data} isSimulated={isSimulated} />} />
           <Route path="/about" element={<AboutPage isSimulated={isSimulated} />} />
         </Routes>

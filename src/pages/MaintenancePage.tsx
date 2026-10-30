@@ -35,6 +35,7 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [filterAsset, setFilterAsset] = useState<string>('all');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingIssueId, setEditingIssueId] = useState<string | null>(null);
   const [formData, setFormData] = useState(EMPTY_ISSUE);
@@ -51,7 +52,8 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
     const matchesStatus = filterStatus === 'all' || issue.status === filterStatus;
     const matchesPriority = filterPriority === 'all' || issue.priority === filterPriority;
     const matchesAsset = filterAsset === 'all' || issue.assetId === filterAsset;
-    return matchesStatus && matchesPriority && matchesAsset;
+    const matchesCategory = filterCategory === 'all' || issue.category === filterCategory;
+    return matchesStatus && matchesPriority && matchesAsset && matchesCategory;
   });
 
   const handleOpenCreate = () => {
@@ -246,6 +248,26 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
                 ))}
               </select>
             </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label htmlFor="filter-category">Category</label>
+              <select
+                id="filter-category"
+                value={filterCategory}
+                onChange={e => setFilterCategory(e.target.value)}
+              >
+                <option value="all">All Categories</option>
+                <option value="siltation">Siltation / Sediment</option>
+                <option value="blockage">Inlet / Gutter Blockage</option>
+                <option value="leakage">Leakage / Seepage</option>
+                <option value="structural">Structural Breach</option>
+                <option value="vegetation">Vegetation / Weed Infestation</option>
+                <option value="damaged_component">Damaged Component</option>
+                <option value="inspection_overdue">Inspection Overdue</option>
+                <option value="sensor_failure">Sensor / Gauge Failure</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -394,6 +416,7 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({
                     <option value="damaged_component">Damaged Component / Filter</option>
                     <option value="leakage">Leakage / Seepage</option>
                     <option value="structural">Bund / Wall Structural Issue</option>
+                    <option value="vegetation">Vegetation / Weed Infestation</option>
                     <option value="sensor_failure">Sensor Malfunction / Battery</option>
                     <option value="inspection_overdue">Scheduled Inspection Overdue</option>
                     <option value="other">Other</option>

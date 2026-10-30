@@ -37,15 +37,15 @@ Rainwater harvesting is a centuries-old practice in Purulia; government agencies
 ---
 
 ## 4. Current Features (Implemented)
-- **Overview Dashboard:** Live summary cards calculated dynamically from the current dataset (registered assets, inspection needs, open issues, latest readings), a 15-point time-series trend chart (Recharts), Leaflet GIS asset map, and recent maintenance logs.
-- **Site Assessment & Rule-Based Screening:** Multi-parameter candidate site survey form. Live 8-factor transparent screening breakdown. Prominently displays *"Insufficient information for assessment"* and suppresses numerical scores if critical parameters are missing. Full screening impact explanations for each factor.
-- **Intervention Comparison:** Side-by-side analysis of 5 options, leading with **Restoration of Existing Ponds/Structures**, followed by Rooftop RWH, Farm Ponds, Percolation Tanks, and Check Dams. Features transparent cost notes (no fake rupee numbers) and mandatory engineering clearance warnings.
-- **Asset Register:** Local storage registry with search, type and condition filtering, full CRUD (Create, Read, Update, Delete with confirmation modal), rectangular tank geometry input ($L \times W \times D$), manual data-source selector, and CSV/JSON export.
-- **Water Monitoring:** Observation logger tracking rainfall events, measured water levels, calculated rectangular storage volumes, and overflow alerts. Includes sensor range validation and clear hydrological distinctions.
-- **Maintenance & Inspection Tracker:** Action tracking workflow categorizing siltation, leakages, blockages, and overdue inspections. Filter by status and priority, log resolution actions, and export to CSV.
-- **Rainwater Calculation Tool:** Rooftop runoff calculation tool with standard hydrological runoff formula, tank capacity sufficiency evaluation, and realistic domestic consumption context.
-- **Reports & Export:** Clean printable audit summary (`window.print()`), complete database JSON backup, and independent CSV exports for assets, observations, and maintenance items.
-- **About & Methodology:** Purulia hydrogeology review, CGWB 2022 citations, and engineering disclaimers.
+- **Decision-Oriented Overview Dashboard:** Live summary cards calculated dynamically from the current dataset (registered assets, candidate sites screened, inspection overdue alerts, critical maintenance issues, latest observations), block/type/condition filters, 15-point time-series trend chart (Recharts), Leaflet GIS asset map with Purulia district bounding context, regional water security narrative, and recent maintenance logs.
+- **Site Assessment & Rule-Based Screening:** Multi-parameter candidate site survey form capturing slope, catchment area + source, soil, geology, existing structures, water demand, community need, land ownership, assessor details, and water quality alerts. Real-time rule-based screening breakdown. Prominently displays *"Insufficient information for assessment"* and suppresses numerical scores if critical parameters are missing. Evaluates subsurface recharge feasibility against hard-rock formations.
+- **Intervention Comparison & Matching Engine:** Side-by-side analysis of 10 distinct conservation interventions, leading with **Restoration of Existing Ponds/Structures (Jal Dharo-Jal Bharo)**, Rooftop RWH, Farm Ponds (Hapas/30-40 Model), Check Dams/Nala Bunds, Staggered Contour Trenching (USHARMUKTI), Percolation Tanks, Recharge Shafts, Infrastructure Repair, Micro-Irrigation, and Community Cisterns. Features an interactive **Site-Specific Compatibility Engine** that evaluates interventions against any selected candidate site.
+- **Asset Register & Governance:** Local storage registry with search, block, type, condition, and inspection overdue filters, full CRUD with confirmation modals, geometry input ($L \times W \times D$), evidence sources, commissioning authorities, and CSV/JSON export.
+- **Water Storage & Quality Monitoring:** Observation logger tracking rainfall events, measured water levels, calculated rectangular storage volumes, overflow alerts, and **water quality observations (pH, TDS, Turbidity, Fluoride, Iron, Nitrate, Coliform)** evaluated against **BIS IS 10500:2012** thresholds. Includes a **CSV Batch Importer** with timestamp validation and duplicate rejection.
+- **Maintenance & Inspection Tracker:** Action tracking workflow categorizing siltation, leakages, blockages, structural breaches, vegetation overgrowth, and overdue inspections. Filter by status, priority, asset, and category, log resolution actions, and export to CSV.
+- **Rainwater Calculation Tool:** Rooftop and surface runoff calculation tool with standard hydrological runoff formula ($1\text{ mm} \times 1\text{ m}^2 = 1\text{ L}$), runoff coefficient presets for 7 surfaces, first-flush diversion loss modelling, storage capacity overflow analysis, and household water demand comparison (LPCD $\times$ days of security).
+- **Planning & Audit Reports:** Clean printable audit summary (`window.print()`), complete database JSON backup, and independent CSV exports for assets, candidate sites, observations, and maintenance items with block filtering.
+- **About & Methodology:** Deep dive into 8 regional water-security themes across Purulia and the Eastern Plateau, authentic citations (CGWB 2022, IMD, WRIDD, USHARMUKTI, BIS 10500), critical verification notes for supplied research claims, and engineering non-claims.
 - **ESP32 Firmware Prototype (`firmware/`):** Arduino C++ sketch for ultrasonic depth sensing with noise rejection, rectangular tank volume estimation, overflow alerts, and offline CSV serial streaming.
 
 ---
@@ -65,7 +65,7 @@ Rainwater harvesting is a centuries-old practice in Purulia; government agencies
 - **Charts:** Recharts 2.x — SVG-based charting for time-series data.
 - **Mapping:** Leaflet 1.9.4 + OpenStreetMap — Lightweight GIS viewer with an automatic offline fallback mode.
 - **Storage:** Browser `localStorage` — Local-first architecture; runs anywhere without cloud accounts, backend servers, or internet dependencies.
-- **Testing:** Vitest 2.x + `@testing-library/jest-dom` — 30 automated unit tests covering calculations, screening, validation, and storage.
+- **Testing:** Vitest 2.x + `@testing-library/jest-dom` — 57 automated unit tests covering calculations, screening, validation, storage, and intervention matching.
 - **Firmware:** Arduino C++ for ESP32.
 
 ---
@@ -100,7 +100,7 @@ Or run Vitest directly:
 ```bash
 npx vitest run
 ```
-All 30 automated tests will execute and verify formula accuracy, critical screening guards, unit conversions, geometry logic, and storage integrity.
+All 57 automated tests will execute and verify formula accuracy, critical screening guards, unit conversions, geometry logic, and storage integrity.
 
 ### Step 5: Build for Production
 ```bash

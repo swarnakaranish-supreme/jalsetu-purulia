@@ -6,16 +6,23 @@ import {
   getAssets,
   getAssetById,
   deleteAsset,
+  saveSiteAssessment,
+  getSiteAssessments,
+  deleteSiteAssessment,
   saveMaintenanceIssue,
   getMaintenanceIssues,
   deleteMaintenanceIssue,
+  saveObservation,
+  getObservations,
   exportAssetsToCSV,
+  exportSitesToCSV,
   exportObservationsToCSV,
   exportMaintenanceToCSV,
   importFromJSON,
+  importObservationsFromCSV,
   clearAllData,
 } from '../lib/storage';
-import type { Asset, MaintenanceIssue, AppData } from '../types';
+import type { Asset, SiteAssessment, MaintenanceIssue, MonitoringObservation, AppData } from '../types';
 
 describe('Storage & CRUD Operations', () => {
   beforeEach(() => {
@@ -44,6 +51,31 @@ describe('Storage & CRUD Operations', () => {
     isSimulated: false,
     createdAt: '2024-01-01T00:00:00Z',
     updatedAt: '2024-01-01T00:00:00Z',
+  };
+
+  const sampleSite: SiteAssessment = {
+    id: 'test-site-1',
+    name: 'Candidate Terraced Field Hapa',
+    block: 'Baghmundi',
+    village: 'Matha',
+    latitude: 23.2,
+    longitude: 86.1,
+    siteType: 'agricultural_land',
+    catchmentAreaSqm: 2500,
+    slopeCategory: 'gentle',
+    soilType: 'laterite',
+    geologyInfo: 'Weathered laterite mantle',
+    existingStructure: '',
+    existingStructureCondition: 'unknown',
+    waterDemand: 'Kharif supplementary irrigation for 2 ha',
+    ownershipStatus: 'government',
+    constraints: 'None',
+    dataSource: 'Direct field visit',
+    assessmentDate: '2024-05-15',
+    notes: 'Suitable for 30-40 farm pond',
+    isSimulated: false,
+    createdAt: '2024-05-15T09:00:00Z',
+    updatedAt: '2024-05-15T09:00:00Z',
   };
 
   it('saves and retrieves assets', () => {
@@ -76,6 +108,17 @@ describe('Storage & CRUD Operations', () => {
     expect(getAssets().length).toBe(1);
     deleteAsset('test-asset-1');
     expect(getAssets().length).toBe(0);
+  });
+
+  it('performs CRUD operations on site assessments', () => {
+    saveSiteAssessment(sampleSite);
+    let sites = getSiteAssessments();
+    expect(sites.length).toBe(1);
+    expect(sites[0].name).toBe('Candidate Terraced Field Hapa');
+
+    deleteSiteAssessment('test-site-1');
+    sites = getSiteAssessments();
+    expect(sites.length).toBe(0);
   });
 
   it('handles maintenance issue CRUD and status updates', () => {
@@ -118,12 +161,18 @@ describe('Storage & CRUD Operations', () => {
     expect(getMaintenanceIssues().length).toBe(0);
   });
 
-  it('exports assets to valid CSV format with proper escaping', () => {
+  it('exports assets and site assessments to valid CSV format with proper escaping', () => {
     saveAsset(sampleAsset);
-    const csv = exportAssetsToCSV();
-    expect(csv).toContain('id,name,type');
-    expect(csv).toContain('Sirkabad Check Dam');
-    expect(csv).toContain('Arsha');
+    const assetCsv = exportAssetsToCSV();
+    expect(assetCsv).toContain('id,name,type');
+    expect(assetCsv).toContain('Sirkabad Check Dam');
+    expect(assetCsv).toContain('Arsha');
+
+    saveSiteAssessment(sampleSite);
+    const siteCsv = exportSitesToCSV();
+    expect(siteCsv).toContain('id,name,block');
+    expect(siteCsv).toContain('Candidate Terraced Field Hapa');
+    expect(siteCsv).toContain('Baghmundi');
   });
 
   it('imports valid JSON and rejects corrupted payload', () => {
@@ -139,5 +188,44 @@ describe('Storage & CRUD Operations', () => {
 
     const invalidRes = importFromJSON('{ corrupted json ');
     expect(invalidRes.success).toBe(false);
+  });
+
+  it('imports observations from CSV with validation and duplicate prevention', () => {
+    saveAsset(sampleAsset);
+
+    const validCsv = `timestamp,rainfallMm,waterLevelM,assetId,notes
+2024-07-01T08:00:00Z,25.5,1.10,test-asset-1,Morning reading
+2024-07-05T08:00:00Z,14.0,1.25,test-asset-1,After shower`;
+
+    const res = importObservationsFromCSV(validCsv);
+    expect(res.success).toBe(true);
+    expect(res.importedCount).toBe(2);
+    expect(res.errors.length).toBe(0);
+
+    const obs = getObservations();
+    expect(obs.length).toBe(2);
+    expect(obs[0].rainfallMm).toBe(25.5);
+
+    // Duplicate import test — re-importing identical timestamps should not create duplicates
+    const resDup = importObservationsFromCSV(validCsv);
+    expect(resDup.importedCount).toBe(0);
+    expect(getObservations().length).toBe(2);
+  });
+
+  it('handles invalid rows in CSV observation import gracefully', () => {
+    saveAsset(sampleAsset);
+
+    const malformedCsv = `timestamp,rainfallMm,waterLevelM,notes
+invalid-date,25.5,1.10,Bad date
+2024-07-10T08:00:00Z,-5.0,1.10,Negative rain
+2024-07-12T08:00:00Z,10.0,60.0,Implausible depth exceeding 50m
+2024-07-15T08:00:00Z,15.0,1.05,Valid row with fallback asset`;
+
+    const res = importObservationsFromCSV(malformedCsv, 'test-asset-1');
+    expect(res.importedCount).toBe(1);
+    expect(res.errors.length).toBe(3);
+    expect(res.errors.some(e => e.includes('Invalid timestamp'))).toBe(true);
+    expect(res.errors.some(e => e.includes('negative'))).toBe(true);
+    expect(res.errors.some(e => e.includes('out of plausible range'))).toBe(true);
   });
 });
